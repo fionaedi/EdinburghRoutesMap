@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edinburgh Accessibility Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --primary-soft: #e8f0fe;
+            --accent: #7c4dff;
+            --danger: #ea4335;
+            --success: #137333;
+            --pen: #d93025;
+            --pen-2: #ea4335;
+            --pen-soft: #fdecea;
+            --pen-border: #f6c9c4;
+            --text: #202124;
+            --text-muted: #5f6368;
+            --border: #e3e6ea;
+            --surface: rgba(255, 255, 255, 0.94);
+            --shadow-lg: 0 10px 40px rgba(26, 40, 80, 0.22);
+            --shadow-sm: 0 2px 8px rgba(26, 40, 80, 0.10);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        #map { height: 100vh; width: 100%; }
+
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(ellipse at 0% 0%, rgba(26,115,232,0.10), transparent 45%);
+            z-index: 500;
+        }
+
+        .sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 410px;
+            max-height: calc(100vh - 40px);
+            background: var(--surface);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-radius: 18px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid rgba(255,255,255,0.6);
+            z-index: 1000;
+            overflow-y: auto;
+            animation: slideIn 0.6s cubic-bezier(.2,.8,.2,1) both;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 8px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #c9d3e3; border-radius: 8px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; margin: 10px 0; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-24px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 var(--pulse, rgba(26,115,232,0.55)); }
+            70%  { box-shadow: 0 0 0 16px rgba(26,115,232,0); }
+            100% { box-shadow: 0 0 0 0 rgba(26,115,232,0); }
+        }
+        @keyframes drop {
+            0%   { transform: translateY(-24px) scale(.6); opacity: 0; }
+            70%  { transform: translateY(2px) scale(1.05); opacity: 1; }
+            100% { transform: translateY(0) scale(1); }
+        }
+        @keyframes shimmer {
+            from { background-position: 200% 0; }
+            to   { background-position: -200% 0; }
+        }
+        @keyframes pop {
+            0%   { transform: scale(.4); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes stripes {
+            to { background-position: 14px 0; }
+        }
+
+        /* ---------- Header ---------- */
+        .sidebar-header {
+            padding: 22px 22px 20px;
+            background: linear-gradient(135deg, #1a73e8 0%, #5b6cf0 55%, #7c4dff 100%);
+            color: #fff;
+            border-radius: 18px 18px 0 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .sidebar-header::before,
+        .sidebar-header::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.10);
+        }
+        .sidebar-header::before { width: 140px; height: 140px; top: -50px; right: -30px; }
+        .sidebar-header::after  { width: 90px; height: 90px; bottom: -40px; right: 70px; }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            margin-bottom: 4px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar-header h1 i {
+            background: rgba(255,255,255,0.2);
+            width: 36px; height: 36px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 10px;
+            font-size: 17px;
+        }
+        .sidebar-header p {
+            font-size: 13px;
+            color: rgba(255,255,255,0.85);
+            position: relative;
+            margin-left: 46px;
+        }
+
+        /* ---------- Search + route inputs ---------- */
+        .search-container { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--border);
+            background: #f6f8fb;
+            border-radius: 28px;
+            padding: 11px 16px;
+            margin-bottom: 14px;
+            transition: all 0.2s;
+        }
+        .search-box:focus-within {
+            background: #fff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(26,115,232,0.12);
+        }
+        .search-box i { color: var(--text-muted); margin-right: 12px; }
+        .search-box input {
+            border: none; outline: none; flex: 1;
+            font-size: 15px; font-family: inherit; background: transparent;
+        }
+
+        .route-inputs { display: flex; flex-direction: column; gap: 4px; position: relative; }
+        .route-inputs::before {
+            content: '';
+            position: absolute;
+            left: 21px; top: 38px; bottom: 38px;
+            border-left: 2px dotted #b8c2d3;
+        }
+
+        .route-input {
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--border);
+            background: #fff;
+            border-radius: 10px;
+            padding: 10px 12px;
+            transition: all 0.2s;
+        }
+        .route-input:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26,115,232,0.10);
+        }
+        .route-input i { color: var(--text-muted); margin-right: 10px; width: 20px; text-align: center; }
+        .route-input input {
+            border: none; outline: none; flex: 1;
+            font-size: 14px; font-family: inherit; background: transparent;
+        }
+        .route-input.origin i { color: var(--primary); }
+        .route-input.destination i { color: var(--danger); }
+
+        .swap-button { display: flex; justify-content: flex-end; margin: -6px 6px -6px 0; position: relative; z-index: 2; }
+        .swap-button button {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            width: 32px; height: 32px;
+            cursor: pointer;
+            color: var(--text-muted);
+            box-shadow: var(--shadow-sm);
+            transition: all 0.25s;
+        }
+        .swap-button button:hover { background: var(--primary-soft); color: var(--primary); transform: rotate(180deg); }
+        .swap-button button i { transform: rotate(90deg); }
+
+        /* ---------- Transport modes ---------- */
+        .transport-modes { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .transport-modes h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .mode-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+
+        .mode-button {
+            --c: var(--primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px 2px 8px;
+            border: 1.5px solid transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(.2,.8,.2,1);
+            background: #f4f6f9;
+            position: relative;
+        }
+        .mode-button:hover {
+            background: #fff;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 14px rgba(26,40,80,0.12);
+        }
+        .mode-button.active {
+            background: color-mix(in srgb, var(--c) 10%, white);
+            border-color: var(--c);
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--c) 28%, transparent);
+        }
+        .mode-button i {
+            font-size: 22px;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+            transition: transform 0.25s, color 0.2s;
+        }
+        .mode-button:hover i { transform: scale(1.18) rotate(-6deg); color: var(--c); }
+        .mode-button.active i { color: var(--c); }
+        .mode-button span { font-size: 10.5px; color: #3c4043; text-align: center; font-weight: 500; }
+        .mode-button.active span { color: var(--c); font-weight: 600; }
+
+        .mode-button[data-mode="car"]          { --c: #1a73e8; }
+        .mode-button[data-mode="bike"]         { --c: #0f9d58; }
+        .mode-button[data-mode="walk"]         { --c: #5f6368; }
+        .mode-button[data-mode="kangaroo"]     { --c: #e8710a; }
+        .mode-button[data-mode="cartwheel"]    { --c: #d81b60; }
+        .mode-button[data-mode="pogo"]         { --c: #8e24aa; }
+        .mode-button[data-mode="elephant"]     { --c: #607d8b; }
+        .mode-button[data-mode="rollerskates"] { --c: #00acc1; }
+        .mode-button[data-mode="wheelbarrow"]  { --c: #795548; }
+        .mode-button[data-mode="balloon"]      { --c: #7c4dff; }
+
+        /* ---------- Mode details ---------- */
+        .mode-details {
+            padding: 16px 20px;
+            font-size: 13px;
+            color: var(--text-muted);
+            display: none;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, #fafbfd, #fff);
+        }
+        .mode-details.visible { display: block; animation: fadeUp 0.35s ease both; }
+        .mode-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .mode-details h4 { color: var(--text); font-size: 15px; }
+        .speed-badge {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--text-muted);
+            background: color-mix(in srgb, var(--mc, var(--primary)) 12%, white);
+            border: 1px solid color-mix(in srgb, var(--mc, var(--primary)) 35%, white);
+            white-space: nowrap;
+        }
+        .speed-badge i { color: var(--mc, var(--primary)); }
+        .speed-badge b { color: var(--text); font-size: 14px; font-weight: 700; }
+
+        /* Obstacle penalty chips (the rules for this mode) */
+        .rules { margin-top: 14px; }
+        .rules h5 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--pen);
+            margin-bottom: 8px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .rules h5.ok { color: var(--success); }
+        .rule-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .rule-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12px;
+            background: var(--pen-soft);
+            color: #8c2a22;
+            border: 1px solid var(--pen-border);
+            border-radius: 20px;
+            padding: 4px 10px;
+        }
+        .rule-chip i { color: var(--pen); font-size: 11px; }
+        .rule-chip b { color: var(--pen); font-weight: 700; }
+
+        /* ---------- Button ---------- */
+        .route-button { margin: 16px 20px; }
+        .route-button button {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, #1a73e8, #5b6cf0);
+            color: white;
+            border: none;
+            border-radius: 28px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            letter-spacing: 0.2px;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(26,115,232,0.35);
+            transition: all 0.2s;
+        }
+        .route-button button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 22px rgba(26,115,232,0.45);
+        }
+        .route-button button:active:not(:disabled) { transform: translateY(0); }
+        .route-button button:disabled {
+            background: #e3e6ea; color: #9aa0a6; box-shadow: none; cursor: not-allowed;
+        }
+        .route-button button.loading {
+            background: linear-gradient(90deg, #1a73e8, #7c4dff, #1a73e8);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s linear infinite;
+            color: #fff;
+        }
+
+        /* ---------- Route info ---------- */
+        .route-info { padding: 4px 20px 16px; display: none; }
+        .route-info.visible { display: block; animation: fadeUp 0.4s ease both; }
+        .route-info h3 { font-size: 15px; color: var(--text); margin-bottom: 10px; }
+
+        .route-stats { display: grid; grid-template-columns: 0.85fr 1.3fr; gap: 10px; }
+        .stat {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--primary-soft);
+            padding: 12px 14px;
+            border-radius: 12px;
+        }
+        .stat > i {
+            flex: none;
+            color: #fff; background: var(--primary);
+            width: 30px; height: 30px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center; font-size: 13px;
+        }
+        .stat.time { background: #f0eafe; }
+        .stat.time > i { background: var(--accent); }
+        .stat-text { min-width: 0; }
+        .stat-text small {
+            display: block;
+            font-size: 10.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .stat-text > span { font-size: 16px; font-weight: 700; color: var(--text); }
+        .time-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+        #duration { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; color: var(--text); }
+
+        /* The penalty pill sits right next to the total time */
+        .penalty-pill {
+            font-style: normal;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: inline-flex; align-items: center; gap: 5px;
+            white-space: nowrap;
+        }
+        .penalty-pill.has {
+            background: var(--pen);
+            color: #fff;
+            box-shadow: 0 3px 10px rgba(217,48,37,0.4);
+            animation: pop 0.5s cubic-bezier(.3,1.5,.5,1) both;
+        }
+        .penalty-pill.none {
+            background: #e6f4ea;
+            color: var(--success);
+            animation: pop 0.5s cubic-bezier(.3,1.5,.5,1) both;
+        }
+
+        .penalty-panel { margin-top: 14px; }
+
+        /* Moving vs penalty split bar */
+        .split-bar {
+            display: flex;
+            height: 16px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #eef1f6;
+        }
+        .seg { height: 100%; width: 0; transition: width 0.9s cubic-bezier(.2,.8,.2,1); }
+        .seg.moving { background: var(--mc, var(--primary)); }
+        .striped {
+            background-color: var(--pen-2);
+            background-image: linear-gradient(135deg,
+                rgba(255,255,255,0.3) 25%, transparent 25%, transparent 50%,
+                rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.3) 75%, transparent 75%);
+            background-size: 14px 14px;
+            animation: stripes 1s linear infinite;
+        }
+        .split-legend {
+            display: flex; justify-content: space-between; gap: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .split-legend b { color: var(--text); }
+        .split-legend .pen b { color: var(--pen); }
+        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+        .dot.moving { background: var(--mc, var(--primary)); }
+        .dot.penalty { background: var(--pen-2); }
+
+        .pen-heading {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--pen);
+            margin: 16px 0 8px;
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .pen-row {
+            display: flex; gap: 11px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: var(--pen-soft);
+            border: 1px solid var(--pen-border);
+            margin-bottom: 8px;
+            animation: fadeUp 0.4s ease both;
+            animation-delay: var(--d, 0s);
+        }
+        .pen-icon {
+            flex: none;
+            width: 34px; height: 34px;
+            border-radius: 10px;
+            background: var(--pen);
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px;
+        }
+        .pen-body { flex: 1; min-width: 0; }
+        .pen-title {
+            display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+            font-size: 13px; font-weight: 600; color: var(--text);
+        }
+        .pen-title b { color: var(--pen); font-size: 15px; font-weight: 800; white-space: nowrap; }
+        .pen-sub { font-size: 12px; color: #7a2a24; margin-top: 2px; }
+        .pen-note { font-size: 11.5px; color: var(--text-muted); font-style: italic; margin-top: 2px; line-height: 1.35; }
+        .pen-bar { height: 5px; border-radius: 5px; background: rgba(217,48,37,0.13); margin-top: 8px; overflow: hidden; }
+        .pen-bar span { display: block; height: 100%; width: 0; transition: width 0.8s cubic-bezier(.2,.8,.2,1); }
+
+        .pen-clear {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 14px;
+            padding: 11px 13px;
+            background: #e6f4ea;
+            border: 1px solid #b7e1c1;
+            border-radius: 12px;
+            font-size: 12.5px;
+            color: var(--success);
+            font-weight: 500;
+            animation: fadeUp 0.4s ease both;
+        }
+        .pen-clear i { font-size: 18px; }
+
+        .pen-foot { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-top: 4px; }
+
+        .warnings {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #fff8e1;
+            border-left: 4px solid #fbbc04;
+            border-radius: 8px;
+            font-size: 12.5px;
+            color: #5f4b00;
+            line-height: 1.6;
+        }
+        .warnings.hidden { display: none; }
+
+        /* ---------- Compare ---------- */
+        .mode-compare { padding: 0 20px 18px; display: none; }
+        .mode-compare.visible { display: block; animation: fadeUp 0.45s ease both; }
+        .mode-compare h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; }
+        .mode-compare-note { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.45; }
+
+        .compare-list { display: flex; flex-direction: column; gap: 6px; }
+
+        .compare-row {
+            display: flex; align-items: center; flex-wrap: wrap;
+            gap: 7px 10px;
+            width: 100%;
+            padding: 9px 12px 10px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            cursor: pointer;
+            text-align: left;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .compare-row:hover { transform: translateX(3px); box-shadow: var(--shadow-sm); }
+        .compare-row.active { background: var(--primary-soft); border-color: var(--primary); }
+        .compare-row > i { width: 20px; color: var(--text-muted); text-align: center; }
+        .compare-row.active > i { color: var(--primary); }
+        .compare-name { flex: 1; font-size: 13px; color: var(--text); }
+        .compare-time { font-size: 13px; font-weight: 700; color: #3c4043; }
+        .compare-pen {
+            font-size: 11px; font-weight: 700;
+            color: var(--pen);
+            background: var(--pen-soft);
+            border: 1px solid var(--pen-border);
+            border-radius: 20px;
+            padding: 1px 8px;
+            white-space: nowrap;
+        }
+        .compare-fastest {
+            font-size: 10px; font-weight: 700;
+            color: var(--success); background: #e6f4ea;
+            border-radius: 20px; padding: 2px 8px;
+        }
+        .compare-fastest::before { content: '\f091'; font-family: 'Font Awesome 6 Free'; font-weight: 900; margin-right: 4px; }
+
+        .cbar {
+            flex: 0 0 100%;
+            display: flex;
+            height: 7px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #eef1f6;
+        }
+        .cb-base, .cb-pen { height: 100%; width: 0; transition: width 0.8s cubic-bezier(.2,.8,.2,1); }
+        .cb-base { background: var(--c, #9aa7bd); }
+
+        /* ---------- Map markers ---------- */
+        .pin { animation: drop 0.45s cubic-bezier(.3,1.4,.5,1) both; }
+        .pin-dot {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+            animation: pulse 2s infinite;
+        }
+        .park-dot {
+            width: 18px; height: 18px; border-radius: 50%;
+            background: #4CAF50; border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 9px;
+        }
+
+        .leaflet-popup-content-wrapper { border-radius: 12px; box-shadow: var(--shadow-lg); font-family: 'Inter', sans-serif; }
+        .leaflet-control-zoom { border: none !important; box-shadow: var(--shadow-sm) !important; border-radius: 12px !important; overflow: hidden; }
+        .leaflet-control-zoom a { color: var(--text-muted) !important; transition: background .2s; }
+        .leaflet-control-zoom a:hover { background: var(--primary-soft) !important; color: var(--primary) !important; }
+        .leaflet-control-attribution { font-size: 10px; border-radius: 8px 0 0 0; }
+
+        .hint {
+            position: absolute;
+            bottom: 28px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(32,33,36,0.88);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-size: 13px;
+            z-index: 900;
+            box-shadow: var(--shadow-lg);
+            display: flex; align-items: center; gap: 8px;
+            transition: opacity 0.4s, transform 0.4s;
+            pointer-events: none;
+        }
+        .hint.hidden { opacity: 0; transform: translate(-50%, 10px); }
+
+        /* ---------- Intro sign ---------- */
+        .intro-overlay {
+            position: fixed; inset: 0;
+            z-index: 3000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+            background: rgba(20, 28, 50, 0.55);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.3s, visibility 0s linear 0.3s;
+        }
+        .intro-overlay.open { opacity: 1; visibility: visible; transition: opacity 0.3s; }
+
+        .intro-card {
+            position: relative;
+            width: 100%; max-width: 500px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            background: #fff;
+            border-radius: 22px;
+            box-shadow: var(--shadow-lg);
+            transform: translateY(18px) scale(0.97);
+            transition: transform 0.4s cubic-bezier(.2,.8,.2,1);
+        }
+        .intro-overlay.open .intro-card { transform: none; }
+
+        .intro-top {
+            position: relative; overflow: hidden;
+            padding: 26px 28px 24px;
+            color: #fff;
+            background: linear-gradient(135deg, #1a73e8 0%, #5b6cf0 55%, #7c4dff 100%);
+        }
+        .intro-top::before, .intro-top::after {
+            content: ''; position: absolute; border-radius: 50%; background: rgba(255,255,255,0.10);
+        }
+        .intro-top::before { width: 170px; height: 170px; top: -70px; right: -40px; }
+        .intro-top::after  { width: 100px; height: 100px; bottom: -50px; right: 90px; }
+
+        .intro-modes { display: flex; gap: 8px; margin-bottom: 14px; position: relative; }
+        .intro-modes span {
+            width: 34px; height: 34px; border-radius: 10px;
+            background: rgba(255,255,255,0.2);
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 15px;
+        }
+        .intro-top h2 {
+            position: relative;
+            font-size: 24px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.2;
+            margin-bottom: 4px; padding-right: 24px;
+        }
+        .intro-top .intro-sub { position: relative; font-size: 13px; color: rgba(255,255,255,0.85); }
+
+        .intro-close {
+            position: absolute; top: 14px; right: 14px; z-index: 2;
+            width: 32px; height: 32px; border-radius: 50%;
+            border: none; cursor: pointer;
+            background: rgba(255,255,255,0.2); color: #fff;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .intro-close:hover { background: rgba(255,255,255,0.35); transform: rotate(90deg); }
+
+        .intro-body { padding: 22px 28px 26px; }
+        .intro-body p { font-size: 14px; line-height: 1.6; color: #3c4043; margin-bottom: 12px; }
+        .intro-body p.why {
+            padding: 12px 14px;
+            background: var(--pen-soft);
+            border-left: 4px solid var(--pen);
+            border-radius: 10px;
+            color: #5a2420;
+        }
+
+        .intro-how {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
+            font-weight: 700; color: var(--text-muted);
+            margin: 18px 0 10px;
+        }
+        .intro-steps { list-style: none; counter-reset: step; display: grid; gap: 11px; margin-bottom: 22px; }
+        .intro-steps li {
+            counter-increment: step;
+            display: flex; gap: 12px; align-items: flex-start;
+            font-size: 13.5px; line-height: 1.5; color: var(--text);
+        }
+        .intro-steps li::before {
+            content: counter(step);
+            flex: none; width: 24px; height: 24px; border-radius: 50%;
+            background: var(--primary-soft); color: var(--primary);
+            font-size: 12px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .intro-steps .chip {
+            display: inline-block; padding: 0 8px; border-radius: 20px;
+            background: var(--pen); color: #fff; font-size: 12px; font-weight: 700;
+        }
+
+        .intro-go {
+            width: 100%; padding: 13px;
+            border: none; border-radius: 28px; cursor: pointer;
+            font-family: inherit; font-size: 15px; font-weight: 600; color: #fff;
+            background: linear-gradient(135deg, #1a73e8, #5b6cf0);
+            box-shadow: 0 6px 16px rgba(26,115,232,0.35);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .intro-go:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(26,115,232,0.45); }
+        .intro-go:focus-visible, .intro-close:focus-visible, .help-button:focus-visible {
+            outline: 3px solid rgba(26,115,232,0.35); outline-offset: 3px;
+        }
+
+        .help-button {
+            position: absolute; top: 20px; right: 20px; z-index: 1000;
+            width: 40px; height: 40px; border-radius: 50%;
+            border: none; cursor: pointer;
+            background: var(--surface); color: var(--primary);
+            box-shadow: var(--shadow-lg);
+            font-size: 16px;
+            transition: transform 0.2s, background 0.2s, color 0.2s;
+        }
+        .help-button:hover { background: var(--primary); color: #fff; transform: scale(1.08); }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width: 640px) {
+            .sidebar {
+                top: auto; bottom: 0; left: 0; right: 0;
+                width: 100%;
+                max-height: 62vh;
+                border-radius: 20px 20px 0 0;
+            }
+            .sidebar-header { border-radius: 20px 20px 0 0; padding: 16px 18px; }
+            .hint { display: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="hint" id="hint"><i class="fas fa-hand-pointer"></i> <span id="hintText">Click the map to set your starting point</span></div>
+
+    <button class="help-button" id="helpButton" aria-label="About this map" title="About this map"><i class="fas fa-question"></i></button>
+
+    <div class="intro-overlay" id="introOverlay" aria-hidden="true">
+        <div class="intro-card" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+            <button class="intro-close" id="introClose" aria-label="Close"><i class="fas fa-xmark"></i></button>
+
+            <div class="intro-top">
+                <div class="intro-modes" aria-hidden="true">
+                    <span><i class="fas fa-arrow-up"></i></span>
+                    <span><i class="fas fa-child"></i></span>
+                    <span><i class="fas fa-horse"></i></span>
+                    <span><i class="fas fa-dolly"></i></span>
+                    <span><i class="fas fa-cloud"></i></span>
+                </div>
+                <h2 id="introTitle">Have you ever ridden a kangaroo to work?</h2>
+                <div class="intro-sub">Edinburgh Accessibility Map</div>
+            </div>
+
+            <div class="intro-body">
+                <p>Ever wondered how long it would take to pogo-stick to work? Explore hypothetical journeys around Edinburgh on unconventional transport, from kangaroos to hot air balloons.</p>
+                <p class="why">Steep hills, cobbles, stairs and kerbs without ramps make everyday journeys hard for people with mobility impairments. Comparing journey times shows how the built environment decides who gets around easily, and who doesn’t.</p>
+
+                <div class="intro-how">How to use it</div>
+                <ol class="intro-steps">
+                    <li><span>Click the map to set a start and destination. A route from Edinburgh Castle to ECCI is loaded to begin.</span></li>
+                    <li><span>Choose how you’ll travel.</span></li>
+                    <li><span>Press <b>Get Directions</b> and compare. Red <span class="chip">+5 min</span> penalties show the time each obstacle costs.</span></li>
+                </ol>
+
+                <button class="intro-go" id="introStart">Start exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1><i class="fas fa-map-marked-alt"></i> Edinburgh Accessibility Map</h1>
+            <p>Explore routes with unique transport modes</p>
+        </div>
+
+        <div class="search-container">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search Edinburgh..." />
+            </div>
+
+            <div class="route-inputs">
+                <div class="route-input origin">
+                    <i class="fas fa-circle"></i>
+                    <input type="text" id="originInput" placeholder="Choose starting point..." />
+                </div>
+
+                <div class="swap-button">
+                    <button id="swapButton" title="Swap origin and destination">
+                        <i class="fas fa-exchange-alt"></i>
+                    </button>
+                </div>
+
+                <div class="route-input destination">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <input type="text" id="destinationInput" placeholder="Choose destination..." />
+                </div>
+            </div>
+        </div>
+
+        <div class="transport-modes">
+            <h3>Choose transport mode</h3>
+            <div class="mode-grid" id="modeGrid">
+                <div class="mode-button active" data-mode="car">
+                    <i class="fas fa-car"></i>
+                    <span>Car</span>
+                </div>
+                <div class="mode-button" data-mode="bike">
+                    <i class="fas fa-bicycle"></i>
+                    <span>Bike</span>
+                </div>
+                <div class="mode-button" data-mode="walk">
+                    <i class="fas fa-walking"></i>
+                    <span>Walk</span>
+                </div>
+                <div class="mode-button" data-mode="kangaroo">
+                    <i class="fas fa-horse"></i>
+                    <span>Kangaroo</span>
+                </div>
+                <div class="mode-button" data-mode="cartwheel">
+                    <i class="fas fa-child"></i>
+                    <span>Cartwheel</span>
+                </div>
+                <div class="mode-button" data-mode="pogo">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>Pogo</span>
+                </div>
+                <div class="mode-button" data-mode="elephant">
+                    <i class="fas fa-paw"></i>
+                    <span>Elephant</span>
+                </div>
+                <div class="mode-button" data-mode="rollerskates">
+                    <i class="fas fa-skating"></i>
+                    <span>Rollerskates</span>
+                </div>
+                <div class="mode-button" data-mode="wheelbarrow">
+                    <i class="fas fa-dolly"></i>
+                    <span>Wheelbarrow</span>
+                </div>
+                <div class="mode-button" data-mode="balloon">
+                    <i class="fas fa-cloud"></i>
+                    <span>Balloon</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="mode-details" id="modeDetails">
+            <div class="mode-head">
+                <h4 id="modeName">Car</h4>
+                <span class="speed-badge" id="speedBadge"><i class="fas fa-gauge-high"></i> <b id="modeSpeed">50</b> km/h</span>
+            </div>
+            <div class="rules" id="modeRules"></div>
+        </div>
+
+        <div class="route-button">
+            <button id="routeButton" disabled>Get Directions</button>
+        </div>
+
+        <div class="route-info" id="routeInfo">
+            <h3>Route Information</h3>
+            <div class="route-stats">
+                <div class="stat">
+                    <i class="fas fa-road"></i>
+                    <div class="stat-text">
+                        <small>Distance</small>
+                        <span id="distance">0 km</span>
+                    </div>
+                </div>
+                <div class="stat time">
+                    <i class="fas fa-clock"></i>
+                    <div class="stat-text">
+                        <small>Total time</small>
+                        <div class="time-line">
+                            <span id="duration">0 min</span>
+                            <em class="penalty-pill none" id="penaltyPill"></em>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="penalty-panel" id="penaltyPanel"></div>
+            <div class="warnings" id="warnings"></div>
+        </div>
+
+        <div class="mode-compare" id="modeCompare">
+            <h3>Compare modes</h3>
+            <p class="mode-compare-note" id="modeCompareNote"></p>
+            <div class="compare-list" id="compareList"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        /* ====================================================================
+           Transport mode configurations
+
+           Each constraint a mode can't handle ('not-permitted' stairs/barriers,
+           a surface restriction, or a max gradient) now has a realistic penalty
+           in `penalties`:
+             stairs / barriers / steepGradient : { minutes } added per encounter
+             roughSurface                      : { slowKmh } speed lost on cobbles/gravel
+           Each also has a `note` that is shown to the user.
+           ==================================================================== */
+        const transportModes = {
+            car: {
+                name: 'Car',
+                icon: 'fa-car',
+                speed: 50,
+                footwayRoad: 'roads',
+                surface: 'all',
+                stairs: 'na',
+                barriers: 'na',
+                gradient: 25,
+                description: 'Standard car travel on roads',
+                penalties: {
+                    steepGradient: { minutes: 1, note: 'Crawling up the steepest streets, or taking a detour around them' }
+                }
+            },
+            bike: {
+                name: 'Bike',
+                icon: 'fa-bicycle',
+                speed: 16,
+                footwayRoad: 'both',
+                surface: 'all',
+                stairs: 'not-permitted',
+                barriers: 'not-permitted',
+                gradient: 20,
+                description: 'Cycling on roads and paths',
+                penalties: {
+                    stairs:        { minutes: 5,   note: 'Shouldering the bike up (or down) every flight' },
+                    barriers:      { minutes: 1.5, note: 'Dismounting to lift the bike over kerbs, gates and bollards' },
+                    steepGradient: { minutes: 3,   note: 'Getting off and pushing up the steepest sections' }
+                }
+            },
+            walk: {
+                name: 'Walk',
+                icon: 'fa-walking',
+                speed: 5,
+                footwayRoad: 'footway-grass',
+                surface: 'all',
+                stairs: 'permitted',
+                barriers: 'permitted',
+                gradient: null,
+                description: 'Standard walking (offroad only)',
+                penalties: {}
+            },
+            kangaroo: {
+                name: 'Riding a Kangaroo',
+                icon: 'fa-horse',
+                speed: 20,
+                footwayRoad: 'footway-grass',
+                surface: 'all',
+                stairs: 'permitted',
+                barriers: 'not-permitted',
+                gradient: null,
+                description: 'Hopping around on a kangaroo (offroad only)',
+                penalties: {
+                    barriers: { minutes: 2, note: 'Dismounting and coaxing the kangaroo through gates and around bollards' }
+                }
+            },
+            cartwheel: {
+                name: 'Cartwheeling',
+                icon: 'fa-child',
+                speed: 3,
+                footwayRoad: 'footway-grass',
+                surface: 'no-cobble-gravel',
+                stairs: 'not-permitted',
+                barriers: 'not-permitted',
+                gradient: 15,
+                description: 'Cartwheeling along footways and grass (offroad only)',
+                penalties: {
+                    stairs:        { minutes: 4,   note: 'Standing up, walking the flight, then waiting for the dizziness to pass' },
+                    barriers:      { minutes: 1.5, note: 'Stopping to squeeze around kerbs and gates' },
+                    roughSurface:  { slowKmh: 1,   note: 'Cobbles and gravel are brutal on the wrists, so every cartwheel is slower' },
+                    steepGradient: { minutes: 3,   note: 'Cartwheeling uphill is exhausting, so frequent rests' }
+                }
+            },
+            pogo: {
+                name: 'Pogo-stick',
+                icon: 'fa-arrow-up',
+                speed: 2,
+                footwayRoad: 'footway',
+                surface: 'no-cobble-gravel',
+                stairs: 'not-permitted',
+                barriers: 'not-permitted',
+                gradient: 15,
+                description: 'Bouncing on a pogo stick',
+                penalties: {
+                    stairs:        { minutes: 3,   note: 'Carrying the pogo stick up and down each flight' },
+                    barriers:      { minutes: 1.5, note: 'Hopping off to lift it over kerbs and gates' },
+                    roughSurface:  { slowKmh: 0.8, note: 'Uneven ground makes every bounce unpredictable' },
+                    steepGradient: { minutes: 2,   note: 'Every bounce loses ground on the way up' }
+                }
+            },
+            elephant: {
+                name: 'Elephant',
+                icon: 'fa-paw',
+                speed: 7,
+                footwayRoad: 'both',
+                surface: 'all',
+                stairs: 'not-permitted',
+                barriers: 'not-permitted',
+                gradient: 30,
+                description: 'Riding an elephant',
+                penalties: {
+                    stairs:        { minutes: 6, note: 'No stairs for an elephant, so the long way round via a ramp' },
+                    barriers:      { minutes: 4, note: 'Too wide for gates and bollards, so a detour to find a gap' },
+                    steepGradient: { minutes: 1, note: 'A slow, careful plod up the steepest bits' }
+                }
+            },
+            rollerskates: {
+                name: 'Roller Skates',
+                icon: 'fa-skating',
+                speed: 14,
+                footwayRoad: 'road',
+                surface: 'smooth-only',
+                stairs: 'not-permitted',
+                barriers: 'not-permitted',
+                gradient: 15,
+                description: 'Roller skating on smooth roads',
+                penalties: {
+                    stairs:        { minutes: 3, note: 'Skates off, carry them up, skates back on' },
+                    barriers:      { minutes: 1, note: 'Carefully stepping up and down kerbs' },
+                    roughSurface:  { slowKmh: 6, note: 'Cobbles rattle the wheels and force a cautious shuffle' },
+                    steepGradient: { minutes: 2, note: 'Walking up in skates, braking hard on the way down' }
+                }
+            },
+            wheelbarrow: {
+                name: 'Wheelbarrow',
+                icon: 'fa-dolly',
+                speed: 4,
+                footwayRoad: 'footway',
+                surface: 'no-gravel-cobble',
+                stairs: 'not-permitted',
+                barriers: 'not-permitted',
+                gradient: 10,
+                description: 'Pushing a wheelbarrow',
+                penalties: {
+                    stairs:        { minutes: 4, note: 'Heaving the barrow up one step at a time' },
+                    barriers:      { minutes: 2, note: 'Lifting the barrow over kerbs and gates' },
+                    roughSurface:  { slowKmh: 1, note: 'Cobbles jolt the wheel and the load' },
+                    steepGradient: { minutes: 3, note: 'Pushing a loaded barrow uphill' }
+                }
+            },
+            balloon: {
+                name: 'Hot Air Balloon',
+                icon: 'fa-cloud',
+                speed: 12,
+                footwayRoad: 'air',
+                surface: 'na',
+                stairs: 'na',
+                barriers: 'na',
+                gradient: 'na',
+                description: 'Flying in a hot air balloon (includes walking to nearest park)',
+                penalties: {}
+            }
+        };
+
+        // Per-mode accent colours, used for the drawn route line
+        const modeColors = {
+            car: '#1a73e8', bike: '#0f9d58', walk: '#5f6368', kangaroo: '#e8710a',
+            cartwheel: '#d81b60', pogo: '#8e24aa', elephant: '#607d8b',
+            rollerskates: '#00acc1', wheelbarrow: '#795548', balloon: '#7c4dff'
+        };
+
+        /* ====================================================================
+           Penalty model
+           The routing service doesn't report where stairs, kerbs or cobbles are,
+           so we estimate how often a typical Edinburgh route meets each one.
+           Tweak these rates to taste.
+           ==================================================================== */
+        const ENCOUNTER_RATES = {
+            stairs: 0.8,         // flights of stairs per km (closes, wynds, footbridges)
+            barriers: 1.2,       // kerbs / gates / bollards per km
+            steepGradient: 0.6,  // steep climbs per km (Old Town, Calton Hill...)
+            roughShare: 0.2      // share of the route on cobbles / gravel
+        };
+        const ROUGH_SURFACES = ['no-cobble-gravel', 'no-gravel-cobble', 'smooth-only'];
+
+        const penaltyMeta = {
+            stairs:        { icon: 'fa-stairs',   label: 'Stairs' },
+            barriers:      { icon: 'fa-ban',      label: 'Kerbs & barriers' },
+            roughSurface:  { icon: 'fa-grip',     label: 'Cobbles & gravel' },
+            steepGradient: { icon: 'fa-mountain', label: 'Steep climbs' }
+        };
+
+        // Which constraints actually apply to this mode?
+        function activeConstraints(config) {
+            const r = config.penalties || {};
+            const keys = [];
+            if (config.stairs === 'not-permitted' && r.stairs) keys.push('stairs');
+            if (config.barriers === 'not-permitted' && r.barriers) keys.push('barriers');
+            if (ROUGH_SURFACES.includes(config.surface) && r.roughSurface) keys.push('roughSurface');
+            if (typeof config.gradient === 'number' && r.steepGradient) keys.push('steepGradient');
+            return keys;
+        }
+
+        // Full time breakdown for a mode over a given distance
+        function calculatePenalties(config, distanceKm) {
+            const rules = config.penalties || {};
+            const baseMinutes = (distanceKm / config.speed) * 60;
+            const items = [];
+
+            activeConstraints(config).forEach(key => {
+                const rule = rules[key];
+
+                if (key === 'roughSurface') {
+                    // Cobbles slow you down: time lost = extra time to cover the rough stretch
+                    const roughKm = distanceKm * ENCOUNTER_RATES.roughShare;
+                    const slowSpeed = Math.max(config.speed - rule.slowKmh, 0.5);
+                    const minutes = roughKm * 60 * (1 / slowSpeed - 1 / config.speed);
+                    if (roughKm > 0 && minutes > 0) {
+                        items.push({
+                            key,
+                            label: config.surface === 'smooth-only' ? 'Rough surfaces' : penaltyMeta[key].label,
+                            roughKm,
+                            normalSpeed: config.speed,
+                            slowSpeed,
+                            slowKmh: rule.slowKmh,
+                            minutes,
+                            note: rule.note
+                        });
+                    }
+                    return;
+                }
+
+                const rate = ENCOUNTER_RATES[key];
+                const count = Math.round(distanceKm * rate);
+                if (count > 0) {
+                    const unit = key === 'stairs' ? 'flight' : key === 'steepGradient' ? 'climb' : 'obstacle';
+                    items.push({
+                        key,
+                        label: penaltyMeta[key].label,
+                        count,
+                        unit: count === 1 ? unit : unit + 's',
+                        each: rule.minutes,
+                        minutes: count * rule.minutes,
+                        note: rule.note
+                    });
+                }
+            });
+
+            items.sort((a, b) => b.minutes - a.minutes);
+            const penaltyMinutes = items.reduce((sum, it) => sum + it.minutes, 0);
+            return { baseMinutes, items, penaltyMinutes, totalMinutes: baseMinutes + penaltyMinutes };
+        }
+
+        // Initialize map centered on Edinburgh
+        const map = L.map('map', { zoomControl: false }).setView([55.9533, -3.1883], 13);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Marker factory (animated, pulsing pins)
+        function makePinIcon(color, pulseRgba) {
+            return L.divIcon({
+                className: 'pin',
+                html: `<div class="pin-dot" style="background:${color}; --pulse:${pulseRgba};"></div>`,
+                iconSize: [22, 22],
+                iconAnchor: [11, 11]
+            });
+        }
+        const originIcon = () => makePinIcon('#1a73e8', 'rgba(26,115,232,0.55)');
+        const destIcon = () => makePinIcon('#ea4335', 'rgba(234,67,53,0.55)');
+        const parkIcon = () => L.divIcon({
+            className: 'pin',
+            html: '<div class="park-dot"><i class="fas fa-tree"></i></div>',
+            iconSize: [18, 18],
+            iconAnchor: [9, 9]
+        });
+
+        // State
+        let selectedMode = 'car';
+        let originMarker = null;
+        let destinationMarker = null;
+        let routeLayers = [];
+        let auxiliaryMarkers = [];
+        let lastRouteDistanceKm = null;
+        let routeGeneration = 0; // lets us ignore stale responses when the mode changes mid-request
+
+        // DOM elements
+        const modeButtons = document.querySelectorAll('.mode-button');
+        const modeDetails = document.getElementById('modeDetails');
+        const modeName = document.getElementById('modeName');
+        const modeSpeed = document.getElementById('modeSpeed');
+        const speedBadge = document.getElementById('speedBadge');
+        const modeRules = document.getElementById('modeRules');
+        const routeButton = document.getElementById('routeButton');
+        const routeInfo = document.getElementById('routeInfo');
+        const warnings = document.getElementById('warnings');
+        const originInput = document.getElementById('originInput');
+        const destinationInput = document.getElementById('destinationInput');
+        const swapButton = document.getElementById('swapButton');
+        const searchInput = document.getElementById('searchInput');
+        const modeCompare = document.getElementById('modeCompare');
+        const modeCompareNote = document.getElementById('modeCompareNote');
+        const compareList = document.getElementById('compareList');
+        const penaltyPill = document.getElementById('penaltyPill');
+        const penaltyPanel = document.getElementById('penaltyPanel');
+        const hint = document.getElementById('hint');
+        const hintText = document.getElementById('hintText');
+
+        // Keep routes clear of the sidebar when fitting the map view
+        function fitOptions() {
+            return window.innerWidth > 640
+                ? { paddingTopLeft: [450, 60], paddingBottomRight: [60, 60] }
+                : { padding: [50, 50] };
+        }
+
+        function updateHint() {
+            if (!originMarker) {
+                hintText.textContent = 'Click the map to set your starting point';
+                hint.classList.remove('hidden');
+            } else if (!destinationMarker) {
+                hintText.textContent = 'Now click to set your destination';
+                hint.classList.remove('hidden');
+            } else {
+                hint.classList.add('hidden');
+            }
+        }
+
+        function formatDuration(minutes) {
+            if (minutes < 1) return '< 1 min';
+            if (minutes < 60) return `${Math.round(minutes)} min`;
+            const hours = Math.floor(minutes / 60);
+            const mins = Math.round(minutes % 60);
+            return mins === 0 ? `${hours} h` : `${hours} h ${mins} min`;
+        }
+
+        // Penalty-friendly duration: shows a decimal for small values (1.5 min)
+        function fmtMin(m) {
+            if (m < 0.05) return '0 min';
+            if (m < 10) return `${Math.round(m * 10) / 10} min`;
+            return formatDuration(m);
+        }
+
+        // Grow bars from 0 so the penalty "fills in" visibly
+        function animateBars(root) {
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                root.querySelectorAll('[data-w]').forEach(el => {
+                    el.style.width = el.dataset.w + '%';
+                });
+            }));
+        }
+
+        // Update mode details display
+        function updateModeDetails(mode) {
+            const config = transportModes[mode];
+            modeName.textContent = config.name;
+
+            modeSpeed.textContent = config.speed;
+            speedBadge.style.setProperty('--mc', modeColors[mode] || '#1a73e8');
+
+            // The penalty rules for this mode
+            const keys = activeConstraints(config);
+            if (keys.length) {
+                const chips = keys.map(key => {
+                    const rule = config.penalties[key];
+                    const meta = penaltyMeta[key];
+                    const label = key === 'roughSurface' && config.surface === 'smooth-only' ? 'Rough surfaces' : meta.label;
+                    const value = key === 'roughSurface'
+                        ? `<b>−${rule.slowKmh} km/h</b>`
+                        : `<b>+${fmtMin(rule.minutes)}</b> each`;
+                    return `<span class="rule-chip" title="${rule.note}"><i class="fas ${meta.icon}"></i>${label} ${value}</span>`;
+                }).join('');
+                modeRules.innerHTML = `<h5><i class="fas fa-hourglass-half"></i> Obstacle penalties</h5><div class="rule-chips">${chips}</div>`;
+            } else {
+                modeRules.innerHTML = `<h5 class="ok"><i class="fas fa-circle-check"></i> No obstacle penalties for this mode</h5>`;
+            }
+
+            // restart the fade-in animation on each mode change
+            modeDetails.classList.remove('visible');
+            void modeDetails.offsetWidth;
+            modeDetails.classList.add('visible');
+        }
+
+        function selectMode(mode) {
+            selectedMode = mode;
+            modeButtons.forEach(button => {
+                button.classList.toggle('active', button.dataset.mode === mode);
+            });
+            updateModeDetails(mode);
+            updateCompareHighlight();
+
+            // Each mode has its own constraints and penalties, so redraw the path.
+            if (originMarker && destinationMarker) {
+                requestRoute();
+            }
+        }
+
+        function updateCompareHighlight() {
+            compareList.querySelectorAll('.compare-row').forEach(row => {
+                row.classList.toggle('active', row.dataset.mode === selectedMode);
+            });
+        }
+
+        /* ---------- Penalty visuals for the selected mode ---------- */
+        function renderPenaltyPanel(config, bd) {
+            const pct = bd.totalMinutes > 0 ? (bd.penaltyMinutes / bd.totalMinutes) * 100 : 0;
+            const hasPen = bd.penaltyMinutes >= 0.05;
+            const color = modeColors[selectedMode] || '#1a73e8';
+
+            // Pill right next to the total time
+            penaltyPill.className = 'penalty-pill';
+            void penaltyPill.offsetWidth; // restart the pop animation
+            penaltyPill.classList.add(hasPen ? 'has' : 'none');
+            penaltyPill.innerHTML = hasPen
+                ? `<i class="fas fa-hourglass-half"></i> +${fmtMin(bd.penaltyMinutes)}`
+                : `<i class="fas fa-circle-check"></i> No penalty`;
+            penaltyPill.title = hasPen
+                ? `${fmtMin(bd.baseMinutes)} moving + ${fmtMin(bd.penaltyMinutes)} lost to obstacles`
+                : 'Nothing slowed this route down';
+
+            const keys = activeConstraints(config);
+            let html = `
+                <div style="--mc:${color}">
+                    <div class="split-bar">
+                        <span class="seg moving" data-w="${(100 - pct).toFixed(1)}"></span>
+                        <span class="seg striped" data-w="${pct.toFixed(1)}"></span>
+                    </div>
+                    <div class="split-legend">
+                        <span><i class="dot moving"></i>Moving <b>${fmtMin(bd.baseMinutes)}</b></span>
+                        <span class="pen"><i class="dot penalty"></i>Penalties <b>+${fmtMin(bd.penaltyMinutes)}</b>${hasPen ? ` (${Math.round(pct)}%)` : ''}</span>
+                    </div>
+                </div>`;
+
+            if (bd.items.length) {
+                html += `<h4 class="pen-heading"><i class="fas fa-triangle-exclamation"></i> Where the time goes</h4>`;
+                html += bd.items.map((it, i) => {
+                    const meta = penaltyMeta[it.key];
+                    const share = bd.penaltyMinutes > 0 ? (it.minutes / bd.penaltyMinutes) * 100 : 0;
+                    const sub = it.key === 'roughSurface'
+                        ? `${it.roughKm.toFixed(2)} km at ${+it.slowSpeed.toFixed(1)} km/h instead of ${it.normalSpeed} km/h`
+                        : `${it.count} ${it.unit} × ${fmtMin(it.each)} each`;
+                    return `
+                        <div class="pen-row" style="--d:${(i * 0.08).toFixed(2)}s">
+                            <div class="pen-icon"><i class="fas ${meta.icon}"></i></div>
+                            <div class="pen-body">
+                                <div class="pen-title"><span>${it.label}</span><b>+${fmtMin(it.minutes)}</b></div>
+                                <div class="pen-sub">${sub}</div>
+                                <div class="pen-note">${it.note}</div>
+                                <div class="pen-bar"><span class="striped" data-w="${share.toFixed(1)}"></span></div>
+                            </div>
+                        </div>`;
+                }).join('');
+                html += `<p class="pen-foot">Estimated from typical Edinburgh obstacle frequency (about ${ENCOUNTER_RATES.stairs} flights of stairs and ${ENCOUNTER_RATES.barriers} kerbs or gates per km, with ${Math.round(ENCOUNTER_RATES.roughShare * 100)}% of the route on cobbles or gravel), not detected on this exact route.</p>`;
+            } else if (keys.length) {
+                html += `<div class="pen-clear"><i class="fas fa-circle-check"></i><span>No obstacles expected on a route this short, so ${config.name} runs at full speed.</span></div>`;
+            } else {
+                html += `<div class="pen-clear"><i class="fas fa-circle-check"></i><span>${config.name} has no obstacle constraints, so nothing slows it down.</span></div>`;
+            }
+
+            penaltyPanel.innerHTML = html;
+            animateBars(penaltyPanel);
+        }
+
+        /* ---------- Compare every mode, with penalties visible ---------- */
+        function renderModeComparison(distanceKm) {
+            lastRouteDistanceKm = distanceKm;
+            const rows = Object.entries(transportModes)
+                .filter(([key]) => key !== 'balloon')
+                .map(([key, config]) => ({
+                    key,
+                    name: config.name,
+                    icon: config.icon,
+                    bd: calculatePenalties(config, distanceKm)
+                }))
+                .sort((a, b) => a.bd.totalMinutes - b.bd.totalMinutes);
+
+            const fastest = rows[0]?.key;
+            const slowest = rows[rows.length - 1]?.bd.totalMinutes || 1;
+
+            modeCompareNote.textContent = selectedMode === 'balloon'
+                ? 'This balloon trip mixes walking and flying. Times below apply each mode\'s speed and penalties to the same street distance.'
+                : 'Coloured bars are moving time; red stripes are time lost to obstacles. Click a mode to see its route.';
+
+            compareList.innerHTML = rows.map(row => {
+                const bd = row.bd;
+                const hasPen = bd.penaltyMinutes >= 0.05;
+                const baseW = (bd.baseMinutes / slowest) * 100;
+                const penW = (bd.penaltyMinutes / slowest) * 100;
+                return `
+                    <button type="button" class="compare-row${row.key === selectedMode ? ' active' : ''}" data-mode="${row.key}" style="--c:${modeColors[row.key]}" title="${row.name}: ${fmtMin(bd.baseMinutes)} moving + ${fmtMin(bd.penaltyMinutes)} penalties">
+                        <i class="fas ${row.icon}"></i>
+                        <span class="compare-name">${row.name}</span>
+                        ${row.key === fastest ? '<span class="compare-fastest">Fastest</span>' : ''}
+                        ${hasPen ? `<span class="compare-pen">+${fmtMin(bd.penaltyMinutes)}</span>` : ''}
+                        <span class="compare-time">${formatDuration(bd.totalMinutes)}</span>
+                        <span class="cbar">
+                            <span class="cb-base" data-w="${baseW.toFixed(1)}"></span>
+                            <span class="cb-pen striped" data-w="${penW.toFixed(1)}"></span>
+                        </span>
+                    </button>`;
+            }).join('');
+
+            compareList.querySelectorAll('.compare-row').forEach(row => {
+                row.addEventListener('click', () => selectMode(row.dataset.mode));
+            });
+
+            animateBars(compareList);
+            modeCompare.classList.add('visible');
+        }
+
+        // Mode button click handlers
+        modeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                selectMode(button.dataset.mode);
+            });
+        });
+
+        // Map click handler for setting origin/destination
+        map.on('click', (e) => {
+            if (!originMarker) {
+                originMarker = L.marker(e.latlng, { icon: originIcon() }).addTo(map);
+                originInput.value = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+            } else if (!destinationMarker) {
+                destinationMarker = L.marker(e.latlng, { icon: destIcon() }).addTo(map);
+                destinationInput.value = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+                routeButton.disabled = false;
+            } else {
+                // Reset and set new origin
+                routeGeneration++; // cancel any in-flight request
+                if (originMarker) map.removeLayer(originMarker);
+                if (destinationMarker) map.removeLayer(destinationMarker);
+                routeLayers.forEach(layer => map.removeLayer(layer));
+                routeLayers = [];
+                auxiliaryMarkers.forEach(m => map.removeLayer(m));
+                auxiliaryMarkers = [];
+                originMarker = null;
+                destinationMarker = null;
+                lastRouteDistanceKm = null;
+                routeInfo.classList.remove('visible');
+                modeCompare.classList.remove('visible');
+                originInput.value = '';
+                destinationInput.value = '';
+                routeButton.disabled = true;
+                routeButton.classList.remove('loading');
+                routeButton.textContent = 'Get Directions';
+
+                originMarker = L.marker(e.latlng, { icon: originIcon() }).addTo(map);
+                originInput.value = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+            }
+            updateHint();
+        });
+
+        // Swap origin and destination
+        swapButton.addEventListener('click', () => {
+            if (originMarker && destinationMarker) {
+                const originLatLng = originMarker.getLatLng();
+                const destLatLng = destinationMarker.getLatLng();
+
+                originMarker.setLatLng(destLatLng);
+                destinationMarker.setLatLng(originLatLng);
+
+                const originValue = originInput.value;
+                const destValue = destinationInput.value;
+                originInput.value = destValue;
+                destinationInput.value = originValue;
+            }
+        });
+
+        function clearPolylines() {
+            routeLayers.forEach(layer => map.removeLayer(layer));
+            routeLayers = [];
+            auxiliaryMarkers.forEach(m => map.removeLayer(m));
+            auxiliaryMarkers = [];
+        }
+
+        function clearRoute() {
+            clearPolylines();
+            lastRouteDistanceKm = null;
+            modeCompare.classList.remove('visible');
+        }
+
+        // Find nearest park (for hot air balloon) - searches increasingly larger radius
+        async function findNearestPark(latlng) {
+            const radii = [5000, 10000, 20000, 50000]; // Search from 5km to 50km
+
+            for (const radius of radii) {
+                const query = `
+                    [out:json][timeout:25];
+                    (
+                        node["leisure"="park"](around:${radius},${latlng.lat},${latlng.lng});
+                        way["leisure"="park"](around:${radius},${latlng.lat},${latlng.lng});
+                        relation["leisure"="park"](around:${radius},${latlng.lat},${latlng.lng});
+                        node["landuse"="grass"](around:${radius},${latlng.lat},${latlng.lng});
+                        way["landuse"="grass"](around:${radius},${latlng.lat},${latlng.lng});
+                    );
+                    out center;
+                `;
+
+                try {
+                    const response = await fetch('https://overpass-api.de/api/interpreter', {
+                        method: 'POST',
+                        body: query,
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (data.elements && data.elements.length > 0) {
+                        let nearest = null;
+                        let minDist = Infinity;
+
+                        data.elements.forEach(elem => {
+                            const parkLat = elem.lat || elem.center?.lat;
+                            const parkLng = elem.lon || elem.center?.lon;
+
+                            if (parkLat && parkLng) {
+                                const dist = Math.sqrt(
+                                    Math.pow(parkLat - latlng.lat, 2) +
+                                    Math.pow(parkLng - latlng.lng, 2)
+                                );
+
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    nearest = { lat: parkLat, lng: parkLng, name: elem.tags?.name || 'Park' };
+                                }
+                            }
+                        });
+
+                        if (nearest) {
+                            return nearest;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error finding park:', error);
+                }
+            }
+            return null;
+        }
+
+        // Calculate route using OSRM
+        async function calculateRoute(from, to) {
+            const config = transportModes[selectedMode];
+
+            // Map our modes to OSRM profiles
+            const osrmProfiles = {
+                car: 'driving',
+                bike: 'cycling',
+                walk: 'foot',
+                kangaroo: 'foot',
+                cartwheel: 'foot',
+                pogo: 'foot',
+                elephant: 'foot',
+                rollerskates: 'foot',
+                wheelbarrow: 'foot'
+            };
+
+            const profile = osrmProfiles[selectedMode] || 'foot';
+
+            try {
+                const response = await fetch(
+                    `https://router.project-osrm.org/route/v1/${profile}/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`
+                );
+                const data = await response.json();
+
+                if (data.code === 'Ok' && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    // Time = distance / this mode's speed, plus obstacle penalties
+                    const breakdown = calculatePenalties(config, route.distance / 1000);
+
+                    return {
+                        ...route,
+                        duration: breakdown.totalMinutes * 60,
+                        breakdown
+                    };
+                }
+            } catch (error) {
+                console.error('Routing error:', error);
+            }
+            return null;
+        }
+
+        // Calculate straight-line distance (for air/water modes)
+        function calculateStraightLineDistance(from, to) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (to.lat - from.lat) * Math.PI / 180;
+            const dLon = (to.lng - from.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Calculate walking distance to nearest point
+        async function calculateWalkingDistance(from, to) {
+            try {
+                const response = await fetch(
+                    `https://router.project-osrm.org/route/v1/foot/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`
+                );
+                const data = await response.json();
+
+                if (data.code === 'Ok' && data.routes.length > 0) {
+                    return data.routes[0];
+                }
+            } catch (error) {
+                console.error('Walking routing error:', error);
+            }
+            return null;
+        }
+
+        // Get directions (also called when the mode changes with both pins placed)
+        async function requestRoute() {
+            if (!originMarker || !destinationMarker) return;
+
+            const gen = ++routeGeneration;
+            clearRoute();
+            routeButton.disabled = true;
+            routeButton.classList.add('loading');
+            routeButton.textContent = 'Calculating...';
+
+            const from = originMarker.getLatLng();
+            const to = destinationMarker.getLatLng();
+            const mode = selectedMode;
+            const config = transportModes[mode];
+            const routeColor = modeColors[mode] || '#1a73e8';
+
+            let routeData = null;
+            let routeWarnings = [];
+
+            try {
+                if (mode === 'balloon') {
+                    // Hot air balloon: walk to nearest park, fly straight, walk from nearest park
+                    const originPark = await findNearestPark(from);
+                    const destPark = await findNearestPark(to);
+                    if (gen !== routeGeneration) return;
+
+                    if (originPark) {
+                        auxiliaryMarkers.push(
+                            L.marker([originPark.lat, originPark.lng], { icon: parkIcon() })
+                                .addTo(map).bindPopup('<b>Takeoff spot</b><br>' + originPark.name)
+                        );
+                    }
+
+                    if (destPark) {
+                        auxiliaryMarkers.push(
+                            L.marker([destPark.lat, destPark.lng], { icon: parkIcon() })
+                                .addTo(map).bindPopup('<b>Landing spot</b><br>' + destPark.name)
+                        );
+                    }
+
+                    const actualFrom = originPark || from;
+                    const actualTo = destPark || to;
+
+                    // Walking segments
+                    const walk1 = await calculateWalkingDistance(from, actualFrom);
+                    const walk2 = await calculateWalkingDistance(actualTo, to);
+                    if (gen !== routeGeneration) return;
+
+                    // Flying segment (straight line)
+                    const flyDistance = calculateStraightLineDistance(actualFrom, actualTo);
+
+                    let totalDistance = 0;
+                    let movingMinutes = 0;
+                    const walkCoordinates = [];
+                    const flyCoordinates = [[actualFrom.lng, actualFrom.lat], [actualTo.lng, actualTo.lat]];
+
+                    let walkDistance = 0;
+
+                    if (walk1) {
+                        walkDistance += walk1.distance / 1000;
+                        totalDistance += walk1.distance / 1000;
+                        movingMinutes += (walk1.distance / 1000) / transportModes.walk.speed * 60;
+                        walkCoordinates.push(...walk1.geometry.coordinates);
+                    } else {
+                        // If walking route fails, use straight line
+                        const walkDist = calculateStraightLineDistance(from, actualFrom);
+                        walkDistance += walkDist;
+                        totalDistance += walkDist;
+                        movingMinutes += (walkDist / transportModes.walk.speed) * 60;
+                        walkCoordinates.push([from.lng, from.lat]);
+                        walkCoordinates.push([actualFrom.lng, actualFrom.lat]);
+                    }
+
+                    // Add flying segment
+                    totalDistance += flyDistance;
+                    movingMinutes += (flyDistance / config.speed) * 60;
+
+                    if (walk2) {
+                        walkDistance += walk2.distance / 1000;
+                        totalDistance += walk2.distance / 1000;
+                        movingMinutes += (walk2.distance / 1000) / transportModes.walk.speed * 60;
+                        walkCoordinates.push(...walk2.geometry.coordinates);
+                    } else {
+                        // If walking route fails, use straight line
+                        const walkDist = calculateStraightLineDistance(actualTo, to);
+                        walkDistance += walkDist;
+                        totalDistance += walkDist;
+                        movingMinutes += (walkDist / transportModes.walk.speed) * 60;
+                        walkCoordinates.push([actualTo.lng, actualTo.lat]);
+                        walkCoordinates.push([to.lng, to.lat]);
+                    }
+
+                    // Walking segments are subject to walking penalties (none, since walking has no constraints)
+                    const walkBd = calculatePenalties(transportModes.walk, walkDistance);
+                    const breakdown = {
+                        baseMinutes: movingMinutes,
+                        items: walkBd.items,
+                        penaltyMinutes: walkBd.penaltyMinutes,
+                        totalMinutes: movingMinutes + walkBd.penaltyMinutes
+                    };
+
+                    routeData = {
+                        distance: totalDistance * 1000,
+                        duration: breakdown.totalMinutes * 60,
+                        breakdown,
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: [...walkCoordinates, ...flyCoordinates]
+                        },
+                        walkCoordinates,
+                        flyCoordinates
+                    };
+
+                    routeWarnings.push('Includes walking to/from nearest park for takeoff/landing');
+                    routeWarnings.push('Flying segment is straight-line distance');
+                } else {
+                    // Standard routing via OSRM
+                    routeData = await calculateRoute(from, to);
+                    if (gen !== routeGeneration) return;
+                }
+
+                if (routeData) {
+                    // Draw route
+                    if (routeData.walkCoordinates && routeData.flyCoordinates) {
+                        // For balloon: draw walking segments as dotted, flying as solid
+                        const walkCoords = routeData.walkCoordinates.map(coord => [coord[1], coord[0]]);
+                        const flyCoords = routeData.flyCoordinates.map(coord => [coord[1], coord[0]]);
+
+                        // Walking segments (dotted)
+                        const walkLayer = L.polyline(walkCoords, {
+                            color: '#1a73e8',
+                            weight: 5,
+                            opacity: 0.7,
+                            dashArray: '10, 10',
+                            lineCap: 'round'
+                        }).addTo(map);
+                        routeLayers.push(walkLayer);
+
+                        // Flying segment (solid)
+                        const flyLayer = L.polyline(flyCoords, {
+                            color: routeColor,
+                            weight: 5,
+                            opacity: 0.9,
+                            lineCap: 'round'
+                        }).addTo(map);
+                        routeLayers.push(flyLayer);
+
+                        // Fit bounds to combined route
+                        const group = L.featureGroup(routeLayers);
+                        map.fitBounds(group.getBounds(), fitOptions());
+                    } else {
+                        // Standard route: white casing underneath for contrast, coloured line on top
+                        const routeCoords = routeData.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                        const casing = L.polyline(routeCoords, {
+                            color: '#ffffff',
+                            weight: 9,
+                            opacity: 0.9,
+                            lineCap: 'round',
+                            lineJoin: 'round'
+                        }).addTo(map);
+                        const layer = L.polyline(routeCoords, {
+                            color: routeColor,
+                            weight: 5,
+                            opacity: 0.95,
+                            lineCap: 'round',
+                            lineJoin: 'round'
+                        }).addTo(map);
+                        routeLayers.push(casing, layer);
+                        map.fitBounds(layer.getBounds(), fitOptions());
+                    }
+
+                    // Update route info
+                    const distanceKm = routeData.distance / 1000;
+                    const bd = routeData.breakdown;
+
+                    document.getElementById('distance').textContent = `${distanceKm.toFixed(2)} km`;
+                    document.getElementById('duration').textContent = formatDuration(bd.totalMinutes);
+
+                    renderPenaltyPanel(config, bd);
+                    renderModeComparison(distanceKm);
+
+                    if (routeWarnings.length > 0) {
+                        warnings.innerHTML = routeWarnings.map(w => `<div>⚠️ ${w}</div>`).join('');
+                        warnings.classList.remove('hidden');
+                    } else {
+                        warnings.classList.add('hidden');
+                    }
+
+                    routeInfo.classList.add('visible');
+                } else {
+                    penaltyPanel.innerHTML = '';
+                    penaltyPill.className = 'penalty-pill';
+                    penaltyPill.innerHTML = '';
+                    warnings.innerHTML = '<div>❌ Could not calculate route. Try different locations.</div>';
+                    warnings.classList.remove('hidden');
+                    routeInfo.classList.add('visible');
+                }
+            } catch (error) {
+                console.error('Route calculation error:', error);
+                warnings.innerHTML = '<div>❌ Error calculating route. Please try again.</div>';
+                warnings.classList.remove('hidden');
+                routeInfo.classList.add('visible');
+            } finally {
+                if (gen === routeGeneration) {
+                    routeButton.disabled = false;
+                    routeButton.classList.remove('loading');
+                    routeButton.textContent = 'Get Directions';
+                }
+            }
+        }
+
+        routeButton.addEventListener('click', requestRoute);
+
+        // Search functionality (using Nominatim)
+        searchInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter' && searchInput.value.trim()) {
+                try {
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchInput.value + ', Edinburgh')}&limit=5`
+                    );
+                    const data = await response.json();
+
+                    if (data.length > 0) {
+                        const result = data[0];
+                        const latlng = [parseFloat(result.lat), parseFloat(result.lon)];
+
+                        map.flyTo(latlng, 16, { duration: 1.2 });
+
+                        // Add a temporary marker
+                        const tempMarker = L.marker(latlng).addTo(map)
+                            .bindPopup(result.display_name)
+                            .openPopup();
+
+                        // Allow clicking to set as origin or destination
+                        tempMarker.on('click', () => {
+                            if (!originMarker) {
+                                originMarker = L.marker(latlng, { icon: originIcon() }).addTo(map);
+                                originInput.value = result.display_name;
+                                map.removeLayer(tempMarker);
+                            } else if (!destinationMarker) {
+                                destinationMarker = L.marker(latlng, { icon: destIcon() }).addTo(map);
+                                destinationInput.value = result.display_name;
+                                map.removeLayer(tempMarker);
+                                routeButton.disabled = false;
+                            }
+                            updateHint();
+                        });
+                    }
+                } catch (error) {
+                    console.error('Search error:', error);
+                }
+            }
+        });
+
+        // Preset route: Edinburgh Castle to the Edinburgh Centre for Carbon Innovation (ECCI)
+        const PRESET_ROUTE = {
+            origin:      { name: 'Edinburgh Castle', lat: 55.9486, lng: -3.1999 },
+            destination: { name: 'Edinburgh Centre for Carbon Innovation (ECCI)', lat: 55.9486, lng: -3.1841 }
+        };
+
+        function loadPresetRoute() {
+            const o = PRESET_ROUTE.origin;
+            const d = PRESET_ROUTE.destination;
+
+            originMarker = L.marker([o.lat, o.lng], { icon: originIcon() })
+                .addTo(map)
+                .bindTooltip(o.name, { direction: 'top', offset: [0, -12] });
+            destinationMarker = L.marker([d.lat, d.lng], { icon: destIcon() })
+                .addTo(map)
+                .bindTooltip(d.name, { direction: 'top', offset: [0, -12] });
+
+            originInput.value = o.name;
+            destinationInput.value = d.name;
+            routeButton.disabled = false;
+
+            map.fitBounds(L.latLngBounds([o.lat, o.lng], [d.lat, d.lng]), fitOptions());
+            updateHint();
+            requestRoute();
+        }
+
+        // Initialize with car mode details and the preset route
+        updateModeDetails('car');
+        updateHint();
+        loadPresetRoute();
+
+        // Intro sign: opens on load, reopens from the ? button
+        const introOverlay = document.getElementById('introOverlay');
+        const introStart = document.getElementById('introStart');
+        const introClose = document.getElementById('introClose');
+        const helpButton = document.getElementById('helpButton');
+        let introReturnFocus = null;
+
+        function openIntro() {
+            introReturnFocus = document.activeElement;
+            introOverlay.classList.add('open');
+            introOverlay.setAttribute('aria-hidden', 'false');
+            setTimeout(() => introStart.focus({ preventScroll: true }), 60);
+        }
+        function closeIntro() {
+            introOverlay.classList.remove('open');
+            introOverlay.setAttribute('aria-hidden', 'true');
+            if (introReturnFocus && introReturnFocus.focus) introReturnFocus.focus();
+        }
+        introStart.addEventListener('click', closeIntro);
+        introClose.addEventListener('click', closeIntro);
+        helpButton.addEventListener('click', openIntro);
+        introOverlay.addEventListener('click', (e) => { if (e.target === introOverlay) closeIntro(); });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && introOverlay.classList.contains('open')) closeIntro();
+        });
+        openIntro();
+    </script>
+</body>
+</html>
